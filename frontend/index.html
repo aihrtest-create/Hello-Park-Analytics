@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello Park Analytics</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+
+    <div class="container glass-panel">
+        <header>
+            <div class="logo-container">
+                <div class="logo">HP</div>
+                <h1>Analytics Dashboard</h1>
+            </div>
+            <p>Генерация отчетов из Grafana напрямую в Excel</p>
+        </header>
+
+        <form id="report-form">
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    <label for="periodType">Период</label>
+                    <select id="periodType" name="periodType" class="form-control">
+                        <option value="day">День</option>
+                        <option value="month" selected>Месяц</option>
+                        <option value="year">Год</option>
+                    </select>
+                </div>
+                <div class="form-group flex-2" id="dateInputContainer">
+                    <label for="dateValue">Выбор даты</label>
+                    <input type="month" id="dateValue" name="dateValue" class="form-control" required value="2026-03">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="parks-header">
+                    <label>Парки</label>
+                    <div>
+                        <button type="button" id="selectAllParks" class="btn-small">Выбрать все</button>
+                        <button type="button" id="deselectAllParks" class="btn-small btn-secondary">Сбросить</button>
+                    </div>
+                </div>
+                <div class="parks-grid">
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="AVIAPARK" checked> AVIAPARK</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="Atyrau" checked> Atyrau</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="BAKU" checked> BAKU</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="BOGOTA-NUESTRO" checked> BOGOTA-NUESTRO</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="DUBAI" checked> DUBAI</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="Kaspiysk" checked> Kaspiysk</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="MEGA" checked> MEGA</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="RIVIERA" checked> RIVIERA</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="SAKHALIN" checked> SAKHALIN</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="SELIGERSKAYA" checked> SELIGERSKAYA</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="SOCHI" checked> SOCHI</label>
+                    <label class="park-checkbox"><input type="checkbox" name="park" value="VLADIKAVKAZ" checked> VLADIKAVKAZ</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Тип отчета</label>
+                <div class="cards-container">
+                    <label class="report-card">
+                        <input type="radio" name="reportType" value="avatars" checked>
+                        <div class="card-content">
+                            <div class="icon">📊</div>
+                            <h3>Привязка Аватаров</h3>
+                            <p>Детальный отчет по дням (AvatarLinkedInHome)</p>
+                        </div>
+                    </label>
+
+                    <label class="report-card">
+                        <input type="radio" name="reportType" value="conversion">
+                        <div class="card-content">
+                            <div class="icon">🎯</div>
+                            <h3>Конверсия</h3>
+                            <p>Воронка "Создание 아ватара → Первое задание"</p>
+                        </div>
+                    </label>
+
+                    <label class="report-card">
+                        <input type="radio" name="reportType" value="playtime">
+                        <div class="card-content">
+                            <div class="icon">⏳</div>
+                            <h3>Игровое время</h3>
+                            <p>Время в часах по играм и темам</p>
+                        </div>
+                    </label>
+
+                    <label class="report-card">
+                        <input type="radio" name="reportType" value="sessions">
+                        <div class="card-content">
+                            <div class="icon">🎮</div>
+                            <h3>Игровые сессии</h3>
+                            <p>Количество сессий по играм и темам</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" id="generate-btn" class="glow-on-hover">
+                <span class="btn-text">Скачать Excel</span>
+                <div class="loader" id="loader"></div>
+            </button>
+        </form>
+        
+        <div id="error-message" class="error-message hidden"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
