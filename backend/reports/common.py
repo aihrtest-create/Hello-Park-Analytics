@@ -3,7 +3,7 @@ import calendar
 from datetime import datetime
 
 GRAFANA_URL = "https://stat.hello.io"
-API_TOKEN = "YOUR_GRAFANA_API_TOKEN"
+API_TOKEN = os.environ.get("GRAFANA_API_TOKEN", "YOUR_GRAFANA_API_TOKEN")
 DATASOURCE_UID = "adg0kymjjbf28a"
 
 HEADERS = {
