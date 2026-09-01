@@ -1,15 +1,14 @@
 import requests
 import pandas as pd
 from datetime import datetime
-from backend.reports.common import GRAFANA_URL, DATASOURCE_UID, HEADERS, get_time_boundaries
+from backend.reports.common import GRAFANA_URL, DATASOURCE_UID, get_headers, get_time_boundaries, normalize_park_name
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
-def generate_playtime(date_val: str, period_type: str, selected_parks: list, output_path: str):
+def generate_playtime(date_val: str, period_type: str, selected_parks: list, output_path: str, strict_mode: bool = False):
     start_date, stop_date, _ = get_time_boundaries(date_val, period_type)
     
-    # We group by park, zone, and scene to get details per park.
-    # We fetch SessionDuration in seconds and sum it up.
+    # First query: actual playtime from SessionEnd
     flux_query = f'''
     from(bucket: "Analytics_AvatarBD")
       |> range(start: {start_date}, stop: {stop_date})
@@ -21,19 +20,36 @@ def generate_playtime(date_val: str, period_type: str, selected_parks: list, out
       |> sum(column: "_value")
       |> yield(name: "playtime_stats")
     '''
+    
+    # Second query: just to discover other games that don't have SessionEnd
+    flux_query_others = f'''
+    from(bucket: "Analytics_AvatarBD")
+      |> range(start: {start_date}, stop: {stop_date})
+      |> filter(fn: (r) => r["_measurement"] == "PlayerEnteredInstallation")
+      |> filter(fn: (r) => r["_field"] == "value")
+      |> filter(fn: (r) => r["zone"] >= "hp" and r["zone"] < "hq")
+      |> group(columns: ["park", "zone", "scene"])
+      |> count(column: "_value")
+      |> yield(name: "other_games")
+    '''
 
     payload = {
-        "queries": [{"refId": "A", "datasource": {"type": "influxdb", "uid": DATASOURCE_UID}, "query": flux_query, "hide": False}],
+        "queries": [
+            {"refId": "A", "datasource": {"type": "influxdb", "uid": DATASOURCE_UID}, "query": flux_query, "hide": False},
+            {"refId": "B", "datasource": {"type": "influxdb", "uid": DATASOURCE_UID}, "query": flux_query_others, "hide": False}
+        ],
         "from": "0", "to": "9999999999999"
     }
 
-    response = requests.post(f"{GRAFANA_URL}/api/ds/query", headers=HEADERS, json=payload, timeout=30)
+    response = requests.post(f"{GRAFANA_URL}/api/ds/query", headers=get_headers(), json=payload, timeout=30)
+
     response.raise_for_status()
     
-    frames = response.json().get("results", {}).get("A", {}).get("frames", [])
-    results = []
+    results_dict = {}
     
-    for frame in frames:
+    # Process SessionEnd (playtime)
+    frames_a = response.json().get("results", {}).get("A", {}).get("frames", [])
+    for frame in frames_a:
         schema = frame.get("schema", {})
         labels = {}
         val_idx = -1
@@ -47,40 +63,74 @@ def generate_playtime(date_val: str, period_type: str, selected_parks: list, out
         if val_idx == -1 and len(fields) > 0:
             val_idx = len(fields) - 1
                 
-        park = labels.get("park", "Unknown")
+        park = normalize_park_name(labels.get("park", "Unknown"))
         if park not in selected_parks:
             continue
             
         zone = labels.get("zone", "Unknown")
+        if zone in ["hp-quest-portal", "hp-avatars-hologram"]:
+            continue
+
         scene = labels.get("scene", "Unknown")
         
         vals = frame.get("data", {}).get("values", [])
         if val_idx >= 0 and len(vals) > val_idx and len(vals[val_idx]) > 0:
             val_seconds = vals[val_idx][0]
             if val_seconds is not None:
-                val_hours = val_seconds / 3600.0  # Convert to hours
-                results.append({
-                    "Парк": park,
-                    "Тема (zone)": zone,
-                    "Игра (scene)": scene,
-                    "Часов": val_hours
-                })
+                val_hours = val_seconds / 3600.0
+                key = (park, zone, scene)
+                results_dict[key] = results_dict.get(key, 0.0) + val_hours
+                
+    # Process PlayerEnteredInstallation (others with 0 hours)
+    if not strict_mode:
+        frames_b = response.json().get("results", {}).get("B", {}).get("frames", [])
+        for frame in frames_b:
+            schema = frame.get("schema", {})
+            labels = {}
+            fields = schema.get("fields", [])
+            for i, field in enumerate(fields):
+                if "labels" in field:
+                    labels = field["labels"]
+                    
+            park = normalize_park_name(labels.get("park", "Unknown"))
+            if park not in selected_parks:
+                continue
+                
+            zone = labels.get("zone", "Unknown")
+            if zone in ["hp-quest-portal", "hp-avatars-hologram"]:
+                continue
+
+            scene = labels.get("scene", "Unknown")
+            
+            key = (park, zone, scene)
+            if key not in results_dict:
+                results_dict[key] = 0.0
+
+
+    results = []
+    for (park, zone, scene), hours in results_dict.items():
+        results.append({
+            "Парк": park,
+            "Игра (zone)": zone,
+            "Тема (scene)": scene,
+            "Часов": hours
+        })
 
     if not results:
-        raise Exception("Нет данных за выбранный месяц")
+        raise Exception("Нет данных за выбранный период")
 
     df = pd.DataFrame(results)
     
     # 1. Сводная таблица по паркам, темам и играм
     pivot_df = df.pivot_table(
-        index=["Парк", "Тема (zone)", "Игра (scene)"], 
+        index=["Парк", "Игра (zone)", "Тема (scene)"], 
         values="Часов", 
         aggfunc="sum"
     ).fillna(0)
     
     # 2. Общий рейтинг игр (сумма по всем паркам)
     game_rating = df.pivot_table(
-        index=["Тема (zone)", "Игра (scene)"],
+        index=["Игра (zone)", "Тема (scene)"],
         values="Часов",
         aggfunc="sum"
     ).sort_values(by="Часов", ascending=False)

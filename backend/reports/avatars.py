@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
-from backend.reports.common import GRAFANA_URL, DATASOURCE_UID, HEADERS, get_time_boundaries
+from backend.reports.common import GRAFANA_URL, DATASOURCE_UID, get_headers, get_time_boundaries, normalize_park_name
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
@@ -13,8 +13,8 @@ def generate_avatars(date_val: str, period_type: str, selected_parks: list, outp
       |> range(start: {start_date}, stop: {stop_date})
       |> filter(fn: (r) => r["_measurement"] == "AvatarLinkedInHome")
       |> group(columns: ["park"])
-      |> aggregateWindow(every: 1d, fn: count, createEmpty: false)
-      |> yield(name: "avatars_by_day")
+      |> aggregateWindow(every: 1h, fn: count, createEmpty: false)
+      |> yield(name: "avatars_by_hour")
     '''
 
     payload = {
@@ -22,7 +22,8 @@ def generate_avatars(date_val: str, period_type: str, selected_parks: list, outp
         "from": "0", "to": "9999999999999"
     }
 
-    response = requests.post(f"{GRAFANA_URL}/api/ds/query", headers=HEADERS, json=payload, timeout=30)
+    response = requests.post(f"{GRAFANA_URL}/api/ds/query", headers=get_headers(), json=payload, timeout=30)
+
     response.raise_for_status()
     
     frames = response.json().get("results", {}).get("A", {}).get("frames", [])
@@ -35,6 +36,9 @@ def generate_avatars(date_val: str, period_type: str, selected_parks: list, outp
                 park_name = field["labels"]["park"]
                 break
         
+        park_name = normalize_park_name(park_name)
+
+        
         vals = frame.get("data", {}).get("values", [])
         if len(vals) >= 2:
             for ts, val in zip(vals[0], vals[1]):
@@ -46,7 +50,7 @@ def generate_avatars(date_val: str, period_type: str, selected_parks: list, outp
                 results.append({"Дата": dt.strftime("%Y-%m-%d"), "Парк": park_name, "Привязано аватаров": val})
 
     if not results:
-        raise Exception("Нет данных за выбранный месяц")
+        raise Exception("Нет данных за выбранный период")
 
     df = pd.DataFrame(results)
     
@@ -67,6 +71,9 @@ def generate_avatars(date_val: str, period_type: str, selected_parks: list, outp
         pivot_df = pivot_df[pivot_df.index == date_val]
     elif period_type == "year":
         pivot_df = pivot_df[pivot_df.index.str.startswith(date_val)]
+    elif period_type == "custom":
+        start_str, stop_str = date_val.split("_to_")
+        pivot_df = pivot_df[(pivot_df.index >= start_str) & (pivot_df.index <= stop_str)]
     
     pivot_df["ИТОГО"] = pivot_df.sum(axis=1)
     totals = pivot_df.sum(axis=0)

@@ -1,6 +1,6 @@
 import requests
 import pandas as pd
-from backend.reports.common import GRAFANA_URL, DATASOURCE_UID, HEADERS, get_time_boundaries
+from backend.reports.common import GRAFANA_URL, DATASOURCE_UID, get_headers, get_time_boundaries, normalize_park_name
 from openpyxl.styles import PatternFill, Font, Alignment
 
 def generate_conversion(date_val: str, period_type: str, selected_parks: list, output_path: str):
@@ -23,7 +23,8 @@ def generate_conversion(date_val: str, period_type: str, selected_parks: list, o
             "from": "0", "to": "9999999999999"
         }
         try:
-            r = requests.post(f"{GRAFANA_URL}/api/ds/query", headers=HEADERS, json=payload, timeout=30)
+            r = requests.post(f"{GRAFANA_URL}/api/ds/query", headers=get_headers(), json=payload, timeout=30)
+
             r.raise_for_status()
             results = {}
             for frame in r.json().get("results", {}).get("A", {}).get("frames", []):
@@ -32,13 +33,16 @@ def generate_conversion(date_val: str, period_type: str, selected_parks: list, o
                     if "park" in field.get("labels", {}):
                         park_name = field["labels"]["park"]
                         break
+                park_name = normalize_park_name(park_name)
                 vals = frame.get("data", {}).get("values", [])
                 if len(vals) > 0 and len(vals[0]) > 0:
-                    results[park_name] = vals[0][0]
+                    val = vals[0][0] or 0
+                    results[park_name] = results.get(park_name, 0) + val
             return results
         except Exception as e:
             print(f"Error querying {measurement}: {e}")
             return {}
+
 
     avatars_data = run_query("AvatarLinkedInHome", "avatars")
     tasks_data = run_query("AchievementCounted", "tasks")
