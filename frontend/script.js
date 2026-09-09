@@ -5,9 +5,21 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
     const btn = document.getElementById('generate-btn');
     const errorDiv = document.getElementById('error-message');
     
-    const dateVal = form.dateValue.value; 
     const pType = form.periodType.value;
     const reportType = form.reportType.value;
+    let dateVal;
+    
+    if (pType === 'custom') {
+        const start = document.getElementById('dateStart').value;
+        const end = document.getElementById('dateEnd').value;
+        if (!start || !end) {
+            alert("Выберите обе даты!");
+            return;
+        }
+        dateVal = `${start}_to_${end}`;
+    } else {
+        dateVal = form.dateValue.value;
+    }
     
     const parkCheckboxes = document.querySelectorAll('input[name="park"]');
     const selectedParks = Array.from(parkCheckboxes)
@@ -26,7 +38,8 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
     errorDiv.textContent = '';
     
     try {
-        const response = await fetch('/api/generate', {
+        const apiUrl = window.location.pathname.replace(/\/$/, '') + '/api/generate';
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -79,23 +92,35 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
 });
 
 const periodType = document.getElementById('periodType');
-const dateValue = document.getElementById('dateValue');
+const dateInputContainer = document.getElementById('dateInputContainer');
 
-if (periodType && dateValue) {
+if (periodType && dateInputContainer) {
     periodType.addEventListener('change', (e) => {
         const val = e.target.value;
         if (val === 'day') {
-            dateValue.type = 'date';
-            dateValue.value = '2026-03-01';
+            dateInputContainer.innerHTML = `
+                <label for="dateValue">Выбор даты</label>
+                <input type="date" id="dateValue" name="dateValue" class="form-control" required value="2026-03-01">
+            `;
         } else if (val === 'month') {
-            dateValue.type = 'month';
-            dateValue.value = '2026-03';
+            dateInputContainer.innerHTML = `
+                <label for="dateValue">Выбор даты</label>
+                <input type="month" id="dateValue" name="dateValue" class="form-control" required value="2026-03">
+            `;
         } else if (val === 'year') {
-            dateValue.type = 'number';
-            dateValue.placeholder = 'YYYY';
-            dateValue.value = '2026';
-            dateValue.min = '2020';
-            dateValue.max = '2030';
+            dateInputContainer.innerHTML = `
+                <label for="dateValue">Выбор даты</label>
+                <input type="number" id="dateValue" name="dateValue" class="form-control" required placeholder="YYYY" value="2026" min="2020" max="2030">
+            `;
+        } else if (val === 'custom') {
+            dateInputContainer.innerHTML = `
+                <label>Интервал дат</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="date" id="dateStart" class="form-control" required value="2026-03-01" style="flex: 1;">
+                    <span style="align-self: center; color: var(--text-muted);">по</span>
+                    <input type="date" id="dateEnd" class="form-control" required value="2026-03-15" style="flex: 1;">
+                </div>
+            `;
         }
     });
 }

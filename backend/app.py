@@ -1,3 +1,10 @@
+from dotenv import load_dotenv
+
+try:
+    load_dotenv()
+except Exception:
+    pass
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
@@ -6,17 +13,31 @@ from backend.reports.avatars import generate_avatars
 from backend.reports.conversion import generate_conversion
 from backend.reports.playtime import generate_playtime
 from backend.reports.sessions import generate_sessions
+from backend.reports.repeat_visits import generate_repeat_visits
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 CORS(app)
 
 @app.route("/")
+@app.route("/index.html")
 def serve_index():
     return app.send_static_file("index.html")
 
+@app.route("/api/health")
+def health_check():
+    from backend.reports.common import get_api_token
+    token = get_api_token()
+    masked = f"{token[:4]}...{token[-4:]}" if len(token) > 8 else ("EMPTY" if len(token) == 0 else "SHORT")
+    return jsonify({
+        "status": "ok",
+        "token_present": len(token) > 0,
+        "token_length": len(token),
+        "token_preview": masked
+    })
+
 @app.route("/api/generate", methods=["POST"])
 def generate_report():
-    data = request.json
+    data = request.json or {}
     date_val = data.get("dateValue")
     period_type = data.get("periodType", "month")
     report_type = data.get("type")
@@ -44,6 +65,9 @@ def generate_report():
         elif report_type == "sessions":
             generate_sessions(date_val, period_type, selected_parks, output_path)
             filename = f"Sessions_Report_{date_val}.xlsx"
+        elif report_type == "repeat_visits":
+            generate_repeat_visits(date_val, period_type, selected_parks, output_path)
+            filename = f"Repeat_Visits_Report_{date_val}.xlsx"
         else:
             return jsonify({"error": "Invalid report type"}), 400
 
@@ -58,4 +82,5 @@ def generate_report():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host="0.0.0.0", port=port, debug=True)
